@@ -1,0 +1,40 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Java / Gradle
+**/.gradle/
+**/build/
+*.class
+
+# C/CMake
+CMakeFiles/
+CMakeCache.txt
+*.o
+*.obj
+*.exe
