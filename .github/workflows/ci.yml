@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build relay
+        run: dotnet build backend/SyncLab.Server/SyncLab.Server.csproj -c Release
+
+      - name: Test and build client
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Stress CRDT convergence
+        run: python tests/fuzz_crdt.py
+
+      - name: Test WebSocket integration
+        run: |
+          python -m pip install -r tests/requirements.txt
+          dotnet run --no-build -c Release --project backend/SyncLab.Server/SyncLab.Server.csproj &
+          server_pid=$!
+          trap "kill $server_pid" EXIT
+          for attempt in {1..30}; do
+            curl --fail --silent http://localhost:8080/api/health && break
+            sleep 1
+          done
+          python tests/chaos_ws.py

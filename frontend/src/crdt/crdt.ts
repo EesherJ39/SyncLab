@@ -26,9 +26,11 @@ export class CRDT {
   private nodes = new Map<string, Node>();
   private children = new Map<string, string[]>();         // prev -> inserted ids (sorted)
   private appliedOpIds = new Set<string>();
+  private pendingOpIds = new Set<string>();
 
   private pendingByPrev = new Map<string, Op[]>();        // inserts waiting for prev
   private pendingDeletes = new Map<string, Op[]>();       // deletes waiting for target
+  private pendingItemOps = new Map<string, Op[]>();       // checklist ops waiting for add
 
   // checklist state (LWW on done/removed)
   private items = new Map<string, { text: string; done: boolean; doneTs: string; removed: boolean; rmTs: string }>();
@@ -110,14 +112,44 @@ export class CRDT {
 
   // --------- core apply ----------
   private applyOp(op: Op) {
-    if (this.appliedOpIds.has(op.opId)) return;
-    this.appliedOpIds.add(op.opId);
+    if (this.appliedOpIds.has(op.opId) || this.pendingOpIds.has(op.opId)) return;
 
+    if (op.type === 1 && op.prevId !== HEAD && !this.nodes.has(op.prevId)) {
+      this.queuePending(this.pendingByPrev, op.prevId, op);
+      return;
+    }
+    if (op.type === 2 && !this.nodes.has(op.targetId)) {
+      this.queuePending(this.pendingDeletes, op.targetId, op);
+      return;
+    }
+    if ((op.type === 4 || op.type === 5) && !this.items.has(op.itemId)) {
+      this.queuePending(this.pendingItemOps, op.itemId, op);
+      return;
+    }
+
+    this.appliedOpIds.add(op.opId);
     if (op.type === 1) return this.applyInsert(op);
     if (op.type === 2) return this.applyDelete(op);
     if (op.type === 3) return this.applyCheckAdd(op);
     if (op.type === 4) return this.applyCheckToggle(op);
-    if (op.type === 5) return this.applyCheckRemove(op);
+    return this.applyCheckRemove(op);
+  }
+
+  private queuePending(store: Map<string, Op[]>, dependencyId: string, op: Op) {
+    const arr = store.get(dependencyId) ?? [];
+    arr.push(op);
+    store.set(dependencyId, arr);
+    this.pendingOpIds.add(op.opId);
+  }
+
+  private flushPending(store: Map<string, Op[]>, dependencyId: string) {
+    const pending = store.get(dependencyId);
+    if (!pending) return;
+    store.delete(dependencyId);
+    for (const op of pending) {
+      this.pendingOpIds.delete(op.opId);
+      this.applyOp(op);
+    }
   }
 
   private ensureChildren(prev: string) {
@@ -126,13 +158,6 @@ export class CRDT {
 
   private applyInsert(op: Extract<Op, { type: 1 }>) {
     if (this.nodes.has(op.nodeId)) return;
-
-    if (op.prevId !== HEAD && !this.nodes.has(op.prevId)) {
-      const arr = this.pendingByPrev.get(op.prevId) ?? [];
-      arr.push(op);
-      this.pendingByPrev.set(op.prevId, arr);
-      return;
-    }
 
     const node: Node = { id: op.nodeId, prev: op.prevId, ch: op.ch, tomb: false };
     this.nodes.set(node.id, node);
@@ -143,42 +168,25 @@ export class CRDT {
     kids.sort(idCompare);
 
     // flush pending inserts waiting on this node
-    const pending = this.pendingByPrev.get(node.id);
-    if (pending) {
-      this.pendingByPrev.delete(node.id);
-      for (const p of pending) this.applyOp(p);
-    }
-
-    // flush pending deletes targeting this node
-    const pdel = this.pendingDeletes.get(node.id);
-    if (pdel) {
-      this.pendingDeletes.delete(node.id);
-      for (const d of pdel) this.applyOp(d);
-    }
+    this.flushPending(this.pendingByPrev, node.id);
+    this.flushPending(this.pendingDeletes, node.id);
   }
 
   private applyDelete(op: Extract<Op, { type: 2 }>) {
     const node = this.nodes.get(op.targetId);
-    if (!node) {
-      const arr = this.pendingDeletes.get(op.targetId) ?? [];
-      arr.push(op);
-      this.pendingDeletes.set(op.targetId, arr);
-      return;
-    }
+    if (!node) return;
     node.tomb = true;
   }
 
   private applyCheckAdd(op: Extract<Op, { type: 3 }>) {
     if (this.items.has(op.itemId)) return;
     this.items.set(op.itemId, { text: op.text, done: false, doneTs: "0:0", removed: false, rmTs: "0:0" });
+    this.flushPending(this.pendingItemOps, op.itemId);
   }
 
   private applyCheckToggle(op: Extract<Op, { type: 4 }>) {
     const it = this.items.get(op.itemId);
-    if (!it) {
-      // ignore for MVP; could buffer similarly
-      return;
-    }
+    if (!it) return;
     if (idCompare(op.opId, it.doneTs) > 0) {
       it.done = op.done;
       it.doneTs = op.opId;

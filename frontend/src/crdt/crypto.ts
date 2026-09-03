@@ -15,19 +15,22 @@ export function randomKeyB64u(): string {
 }
 
 export async function importRoomKey(keyB64u: string): Promise<CryptoKey> {
-  const raw = b64uDecode(keyB64u);
+  // Copy into an ArrayBuffer-backed view. TypeScript's DOM definitions reject
+  // a generic ArrayBufferLike here because it could be a SharedArrayBuffer.
+  const raw = Uint8Array.from(b64uDecode(keyB64u));
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
 export async function encrypt(key: CryptoKey, plaintext: Uint8Array): Promise<{ ivB64: string; ctB64: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext));
+  const input = Uint8Array.from(plaintext);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, input));
   return { ivB64: b64uEncode(iv), ctB64: b64uEncode(ct) };
 }
 
 export async function decrypt(key: CryptoKey, ivB64: string, ctB64: string): Promise<Uint8Array> {
-  const iv = b64uDecode(ivB64);
-  const ct = b64uDecode(ctB64);
+  const iv = Uint8Array.from(b64uDecode(ivB64));
+  const ct = Uint8Array.from(b64uDecode(ctB64));
   const pt = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct));
   return pt;
 }

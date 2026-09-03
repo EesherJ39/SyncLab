@@ -43,6 +43,7 @@ export default function App() {
 
   const [online, setOnline] = useState(true);
   const [connected, setConnected] = useState(false);
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
 
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [slider, setSlider] = useState<number>(0); // 0..events.length
@@ -78,11 +79,18 @@ export default function App() {
     if (!roomId) return;
     const log = loadRoomLog(roomId);
     setEvents(log);
+    outboxRef.current = log.filter(e => e.seq < 0);
     setSlider(log.length);
     setLive(true);
 
     crdtRef.current = new CRDT(deviceId);
   }, [roomId, deviceId]);
+
+  // Follow incoming operations only while the user is at the live edge. A
+  // historical timeline position remains stable as new operations arrive.
+  useEffect(() => {
+    if (live) setSlider(events.length);
+  }, [events.length, live]);
 
   // apply events up to slider (time travel)
   useEffect(() => {
@@ -102,7 +110,6 @@ export default function App() {
       setViewText(st.text);
       setViewChecklist(st.checklist.map(i => ({ itemId: i.itemId, text: i.text, done: i.done })));
 
-      setLive(slider === events.length);
     })();
   }, [roomId, roomKey, events, slider, deviceId]);
 
@@ -111,19 +118,28 @@ export default function App() {
     if (!roomId || !roomKey) return;
     if (!online) return;
 
+    let disposed = false;
+    let reconnectTimer: number | undefined;
     const ws = new WebSocket(`${WS_BASE}?roomId=${encodeURIComponent(roomId)}&sender=${encodeURIComponent(deviceId)}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
       setConnected(true);
       // flush outbox
-      const out = outboxRef.current.splice(0);
-      for (const ev of out) {
+      for (const ev of outboxRef.current) {
         ws.send(JSON.stringify({ t: "op", roomId, sender: deviceId, iv: ev.iv, ct: ev.ct }));
       }
     };
 
-    ws.onclose = () => setConnected(false);
+    ws.onclose = () => {
+      setConnected(false);
+      if (!disposed && online) {
+        reconnectTimer = window.setTimeout(
+          () => setConnectionAttempt(attempt => attempt + 1),
+          400 + Math.floor(Math.random() * 300),
+        );
+      }
+    };
 
     ws.onmessage = (m) => {
       const msg = JSON.parse(m.data) as WsServerMsg;
@@ -132,17 +148,34 @@ export default function App() {
       setEvents(prev => {
         // de-dupe by seq
         if (prev.some(e => e.seq === msg.seq)) return prev;
-        const next = [...prev, { seq: msg.seq, sender: msg.sender, iv: msg.iv, ct: msg.ct, tsMs: msg.tsMs }];
+        const confirmed: StoredEvent = {
+          seq: msg.seq,
+          sender: msg.sender,
+          iv: msg.iv,
+          ct: msg.ct,
+          tsMs: msg.tsMs,
+        };
+        const placeholder = prev.findIndex(e =>
+          e.seq < 0 && e.sender === msg.sender && e.iv === msg.iv && e.ct === msg.ct
+        );
+        const next = [...prev];
+        if (placeholder >= 0) next.splice(placeholder, 1, confirmed);
+        else next.push(confirmed);
         next.sort((a, b) => a.seq - b.seq);
+        outboxRef.current = outboxRef.current.filter(e =>
+          !(e.sender === msg.sender && e.iv === msg.iv && e.ct === msg.ct)
+        );
         if (roomId) saveRoomLog(roomId, next);
         return next;
       });
     };
 
     return () => {
+      disposed = true;
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       try { ws.close(); } catch {}
     };
-  }, [roomId, roomKey, online, deviceId]);
+  }, [roomId, roomKey, online, deviceId, connectionAttempt]);
 
   async function sendBatch(batchBytes: Uint8Array) {
     if (!roomId || !roomKey) return;
@@ -157,18 +190,19 @@ export default function App() {
       tsMs: Date.now()
     };
 
-    if (!online || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      outboxRef.current.push(localEvent);
-      // also keep it in log for replay visibility
-      setEvents(prev => {
-        const next = [...prev, localEvent];
-        if (roomId) saveRoomLog(roomId, next);
-        return next;
-      });
-      return;
-    }
+    // Persist before attempting transport so a refresh or disconnect cannot
+    // discard an acknowledged-local edit. The server echo replaces this
+    // negative-sequence placeholder with its canonical sequence number.
+    outboxRef.current.push(localEvent);
+    setEvents(prev => {
+      const next = [...prev, localEvent];
+      if (roomId) saveRoomLog(roomId, next);
+      return next;
+    });
 
-    wsRef.current.send(JSON.stringify({ t: "op", roomId, sender: deviceId, iv: ivB64, ct: ctB64 }));
+    if (online && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ t: "op", roomId, sender: deviceId, iv: ivB64, ct: ctB64 }));
+    }
   }
 
   function startDemoRoom() {
@@ -265,7 +299,10 @@ export default function App() {
           <Timeline
             events={events}
             slider={slider}
-            setSlider={setSlider}
+            setSlider={(value) => {
+              setSlider(value);
+              setLive(value === events.length);
+            }}
           />
           <hr />
           <small>
