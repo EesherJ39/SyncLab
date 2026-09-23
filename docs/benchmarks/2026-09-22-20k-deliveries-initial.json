@@ -1,0 +1,165 @@
+{
+  "environment": {
+    "client": {
+      "node": "v24.19.0",
+      "platform": "darwin-arm64",
+      "osRelease": "24.6.0",
+      "cpu": "Apple M3 Pro",
+      "logicalCpus": 11,
+      "memoryGiB": 18
+    },
+    "endpoint": "ws://127.0.0.1:18080/ws"
+  },
+  "workload": {
+    "messages": 4000,
+    "senderCount": 4,
+    "sendsPerSender": 1000,
+    "observerCount": 1,
+    "recipientCount": 5,
+    "trials": 3,
+    "ciphertext": "synthetic base64 payload, 120-byte body; prepared before timing"
+  },
+  "method": "Clock starts after all WebSockets open, a 50 ms join-settling period, and payload preparation; clock stops after every recipient has received all messages. Each recipient verifies contiguous sequence numbers and unique payloads, then remains connected for 100 ms to catch late duplicates. Server startup, connection setup, encryption, and settling periods are outside the timed interval.",
+  "results": [
+    {
+      "trial": 1,
+      "elapsedMs": 196.04,
+      "observerElapsedMs": 195.99,
+      "messagesPerSecond": 20404.15,
+      "socketDeliveries": 20000,
+      "socketDeliveriesPerSecond": 102020.75,
+      "recipients": {
+        "observer": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-0": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-1": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-2": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-3": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "elapsedMs": 135.48,
+      "observerElapsedMs": 135.48,
+      "messagesPerSecond": 29525.13,
+      "socketDeliveries": 20000,
+      "socketDeliveriesPerSecond": 147625.63,
+      "recipients": {
+        "observer": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-0": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-1": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-2": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-3": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "elapsedMs": 111.38,
+      "observerElapsedMs": 111.03,
+      "messagesPerSecond": 35912.38,
+      "socketDeliveries": 20000,
+      "socketDeliveriesPerSecond": 179561.89,
+      "recipients": {
+        "observer": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-0": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-1": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-2": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        },
+        "sender-3": {
+          "received": 4000,
+          "unique": 4000,
+          "missing": 0,
+          "duplicate": 0,
+          "ordered": true
+        }
+      }
+    }
+  ],
+  "summary": {
+    "medianElapsedMs": 135.48,
+    "medianMessagesPerSecond": 29525.13,
+    "medianSocketDeliveriesPerSecond": 147625.63
+  }
+}

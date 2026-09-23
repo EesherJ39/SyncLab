@@ -50,6 +50,7 @@ The browser keeps the room key after `#` in the shared URL. URL fragments are no
 | Deterministic convergence stress | **200 trials × 250 operations × 5 replicas** | all replicas converge after shuffled anti-entropy |
 | Delivery disturbance | **20% temporary loss + 10% duplicate delivery** | replay repairs missing work without double application |
 | WebSocket integration | concurrent clients, fragmented frames, reconnect/broadcast paths | ordered, bounded delivery across connected clients |
+| WebSocket relay benchmark | **20,000 distinct messages × 5 recipients** | 100,000 ordered deliveries with zero missing or duplicates; [method and timings](docs/WEBSOCKET_BENCHMARK.md) |
 
 The stress workload validates **250,000 replica-operation observations**. It is a correctness test, not a claim about internet latency or production scale.
 
@@ -105,6 +106,8 @@ Open the Vite URL, choose **Start demo room**, and open the copied link in a sec
 | `backend/.../RoomStore.cs` | ordered per-room encrypted history |
 | `tests/fuzz_crdt.py` | deterministic multi-replica convergence workload |
 | `tests/chaos_ws.py` | WebSocket ordering and broadcast integration test |
+| `tests/benchmark_ws.mjs` | repeatable WebSocket relay throughput and delivery check |
+| `docs/WEBSOCKET_BENCHMARK.md` | benchmark setup, raw results, and interpretation |
 | `tools/oplog_analyzer/` | native operation-log analysis utility |
 
 ## Security and operating boundaries
