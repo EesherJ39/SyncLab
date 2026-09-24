@@ -7,6 +7,7 @@ import Editor from "./ui/Editor";
 import Checklist from "./ui/Checklist";
 import Timeline from "./ui/Timeline";
 import NetworkToggle from "./ui/NetworkToggle";
+import SyncStatus from "./ui/SyncStatus";
 
 type WsServerMsg = {
   t: "op";
@@ -214,14 +215,18 @@ export default function App() {
   }
 
   const crdt = crdtRef.current;
+  const pendingCount = events.filter(event => event.seq < 0).length;
 
   return (
     <div style={{ padding: 18, maxWidth: 1200, margin: "0 auto" }}>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2 style={{ margin: 0 }}>SyncLab</h2>
-        <span className="badge">
-          {connected ? "WS: connected" : online ? "WS: connecting…" : "WS: offline"}
-        </span>
+        <SyncStatus
+          roomReady={Boolean(roomId && roomKey)}
+          online={online}
+          connected={connected}
+          pendingCount={pendingCount}
+        />
       </div>
 
       <div className="card" style={{ marginTop: 14 }}>
